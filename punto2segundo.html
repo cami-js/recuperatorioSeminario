@@ -1,0 +1,141 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Predicción del valor de Y</title>
+  <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@3.14.0/dist/tf.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@2.9.4"></script>
+</head>
+<body>
+  <h2>Ingresar un número:</h2>
+  <input type="number" id="inputX">
+  <button onclick="trainAndPredict()">Predecir</button>
+  <p id="result"></p>
+  <canvas id="loss-chart"></canvas>
+  <canvas id="scatter-chart"></canvas>
+
+  <script>
+    const tf = window.tf;
+
+    // Función para generar los datos de entrenamiento
+    function generateData() {
+      const X = tf.linspace(-45, 4, 50); // Valores de X desde -45 hasta 4
+      const Y = X.mul(2).add(8); // Fórmula Y = 2X + 8
+      return { X, Y };
+    }
+
+    // Crear el modelo
+    function createModel() {
+      const model = tf.sequential();
+      model.add(tf.layers.dense({ units: 1, inputShape: [1] }));
+      return model;
+    }
+
+    // Función para entrenar el modelo
+    async function trainModel(model, X, Y) {
+      model.compile({ optimizer: 'sgd', loss: 'meanSquaredError' });
+
+      const history = await model.fit(X, Y, {
+        epochs: 600,
+        callbacks: {
+          onEpochEnd: (epoch, logs) => {
+            const loss = logs.loss;
+            updateLossChart(epoch, loss);
+          },
+        },
+      });
+
+      return history;
+    }
+
+    // Actualizar gráfica de pérdida
+    function updateLossChart(epoch, loss) {
+      const lossChart = document.getElementById('loss-chart').getContext('2d');
+      const data = {
+        labels: Array.from({ length: epoch + 1 }, (_, i) => i + 1),
+        datasets: [
+          {
+            label: 'Pérdida',
+            data: Array.from({ length: epoch + 1 }, (_, i) => loss),
+            borderColor: 'red',
+            backgroundColor: 'transparent',
+          },
+        ],
+      };
+
+      if (!window.lossLineChart) {
+        window.lossLineChart = new Chart(lossChart, {
+          type: 'line',
+          data: data,
+          options: {
+            scales: {
+              x: {
+                type: 'linear',
+                position: 'bottom',
+              },
+              y: {
+                type: 'linear',
+                position: 'left',
+              },
+            },
+          },
+        });
+      } else {
+        window.lossLineChart.data.labels = data.labels;
+        window.lossLineChart.data.datasets[0].data = data.datasets[0].data;
+        window.lossLineChart.update();
+      }
+    }
+
+    // Función para entrenar y predecir
+    async function trainAndPredict() {
+      const { X, Y } = generateData();
+      console.log(X.print());
+      console.log(Y.print());
+      //const X = tf.tensor2d([1,2,3,4,5,6,7,8,9],[9,1]);
+      //const Y = tf.tensor2d([10,12,14,16,18,20,22,24,26],[9,1]);
+      
+      
+      const model = createModel();
+      await trainModel(model, X, Y);
+
+      const inputX = Number(document.getElementById('inputX').value);
+      const inputTensor = tf.tensor2d([inputX], [1, 1]);
+      const predictedY = model.predict(inputTensor);
+
+      document.getElementById('result').innerHTML = `Valor predicho de Y: ${predictedY.dataSync()[0]}`;
+
+      // Crear el diagrama de dispersión de los datos
+      const scatterData = {
+        datasets: [
+          {
+            label: 'Datos de entrenamiento',
+            data: Array.from(X.dataSync()),
+            borderColor: 'blue',
+            backgroundColor: 'transparent',
+          },
+        ],
+      };
+
+      const scatterConfig = {
+        type: 'scatter',
+        data: scatterData,
+        options: {
+          scales: {
+            x: {
+              type: 'linear',
+              position: 'bottom',
+            },
+            y: {
+              type: 'linear',
+              position: 'left',
+            },
+          },
+        },
+      };
+
+      const scatterCtx = document.getElementById('scatter-chart').getContext('2d');
+      new Chart(scatterCtx, scatterConfig);
+    }
+  </script>
+</body>
+</html>
